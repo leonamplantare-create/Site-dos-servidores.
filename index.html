@@ -267,7 +267,7 @@
     <div class="mapa-legenda">
       <div style="font-size:0.65rem;font-weight:700;color:var(--text2);margin-bottom:2px;">LEGENDA</div>
       <div class="legenda-item"><div class="legenda-dot" style="background:#DC2626;"></div>Foco ativo</div>
-      <div class="legenda-item"><div class="legenda-dot" style="background:#2563EB;"></div>Selecionado</div>
+      <div class="legenda-item"><div class="legenda-dot" style="background:#DC2626;border:2px solid #fff;box-shadow:0 0 0 2px #DC2626;"></div>Selecionado</div>
     </div>
     <div class="carregando-overlay" id="loading-overlay">
       <div class="spinner"></div>
@@ -345,8 +345,18 @@ function iniciarMapa() {
 
 // ── POPUP HTML ────────────────────────────────────────────────────────────────
 function popupHtml(p, cor) {
+  const fotoHtml = p.foto_url && p.foto_url !== 'null' && p.foto_url !== ''
+    ? `<div style="width:100%;height:160px;overflow:hidden;background:#f3f4f6;">
+         <img src="${p.foto_url}" alt="Foto do foco"
+           style="width:100%;height:160px;object-fit:cover;display:block;cursor:zoom-in;"
+           onerror="this.parentElement.innerHTML='<div style=\\'padding:20px;text-align:center;color:#aaa;font-size:12px;\\'>📷 Foto não disponível</div>'"
+           onclick="abrirFoto('${p.foto_url}')">
+       </div>`
+    : `<div style="padding:16px;text-align:center;color:#9CA3AF;font-size:12px;background:#F9FAFB;">📷 Sem foto registrada</div>`;
+
   return `<div class="popup-inner">
     <div class="popup-header" style="background:${cor};">📍 Foco de Lixo · G${p.grupo}</div>
+    ${fotoHtml}
     <div class="popup-body">
       <div class="popup-linha"><span class="popup-label">📅 Data</span><span class="popup-valor">${p.data||'—'}</span></div>
       <div class="popup-linha"><span class="popup-label">⏰ Hora</span><span class="popup-valor">${p.hora||'—'}</span></div>
@@ -439,11 +449,36 @@ function selecionarPonto(i) {
   if (!p || !_mapaObj) return;
   _mapaObj.setView([p.latitude, p.longitude], 17, { animate: true });
   if (_marcadores[i]) {
-    _marcadores[i].setStyle({ radius: 13, fillColor: '#2563EB', fillOpacity: 1 });
+    // Mantém vermelho — não muda a cor ao selecionar
+    _marcadores[i].setStyle({ radius: 13, fillOpacity: 1 });
     _marcadores[i].openPopup();
   }
   renderizarLista();
 }
+
+// Overlay de foto ampliada
+function abrirFoto(url) {
+  let ov = document.getElementById('foto-overlay-campo');
+  if (!ov) {
+    ov = document.createElement('div');
+    ov.id = 'foto-overlay-campo';
+    ov.style.cssText = 'display:flex;position:fixed;inset:0;background:rgba(0,0,0,0.92);z-index:99999;align-items:center;justify-content:center;cursor:zoom-out;';
+    ov.onclick = () => ov.style.display = 'none';
+    const img = document.createElement('img');
+    img.id = 'foto-overlay-campo-img';
+    img.style.cssText = 'max-width:95vw;max-height:92vh;border-radius:8px;box-shadow:0 8px 40px rgba(0,0,0,0.6);';
+    ov.appendChild(img);
+    document.body.appendChild(ov);
+  }
+  document.getElementById('foto-overlay-campo-img').src = url;
+  ov.style.display = 'flex';
+}
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') {
+    const ov = document.getElementById('foto-overlay-campo');
+    if (ov) ov.style.display = 'none';
+  }
+});
 
 // ── MÉTRICAS ──────────────────────────────────────────────────────────────────
 function atualizarMetricas() {
