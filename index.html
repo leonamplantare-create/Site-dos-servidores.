@@ -221,32 +221,53 @@
         <div class="num" id="met-total">—</div>
         <div class="rot">Focos Mapeados na Ilha</div>
       </div>
-      <div class="metrica-box mb-verm">
-        <div class="num" id="met-grupos">—</div>
-        <div class="rot">Equipes Ativas</div>
+      <div class="metrica-box mb-verm" style="cursor:pointer;" onclick="setFiltroStatus('pendente')">
+        <div class="num" id="met-pendentes">—</div>
+        <div class="rot">⬤ Pendentes</div>
       </div>
-      <div class="metrica-box mb-cinza">
-        <div class="num" id="met-hoje">—</div>
-        <div class="rot">Registros Hoje</div>
+      <div class="metrica-box mb-verde" style="cursor:pointer;" onclick="setFiltroStatus('resolvido')">
+        <div class="num" id="met-resolvidos">—</div>
+        <div class="rot">⬤ Resolvidos</div>
+      </div>
+      <div class="metrica-box" style="background:#FFFBEB;cursor:pointer;" onclick="setFiltroStatus('ressurgencia')">
+        <div class="num" id="met-ressurgencias" style="color:#D97706;">—</div>
+        <div class="rot" style="color:#92400E;">⬤ Ressurgências</div>
       </div>
     </div>
 
     <!-- Busca -->
     <div class="busca-wrap">
       <span class="busca-icon">🔍</span>
-      <input type="text" id="input-busca" placeholder="Buscar por grupo, data ou coordenada..." oninput="filtrarLista()">
+      <input type="text" id="input-busca" placeholder="Buscar por data, coordenada..." oninput="filtrarLista()">
     </div>
 
-    <!-- Filtros por grupo -->
+    <!-- Filtros de status -->
     <div>
-      <div class="secao-titulo">📍 Filtrar por equipe</div>
-      <div class="filtros" id="filtros-grupos" style="margin-top:8px;"></div>
+      <div class="secao-titulo">🎯 Filtrar por status</div>
+      <div class="filtros" style="margin-top:8px;">
+        <button class="filtro-btn ativo" id="filtro-todos"        onclick="setFiltroStatus('todos')">
+          <span class="filtro-dot" style="background:var(--azul-vivo)"></span> Todos os pontos
+          <span class="qtd" id="qtd-todos">—</span>
+        </button>
+        <button class="filtro-btn" id="filtro-pendente"           onclick="setFiltroStatus('pendente')">
+          <span class="filtro-dot" style="background:#DC2626"></span> Pendentes
+          <span class="qtd" id="qtd-pendente">—</span>
+        </button>
+        <button class="filtro-btn" id="filtro-resolvido"          onclick="setFiltroStatus('resolvido')">
+          <span class="filtro-dot" style="background:#16A34A"></span> Resolvidos
+          <span class="qtd" id="qtd-resolvido">—</span>
+        </button>
+        <button class="filtro-btn" id="filtro-ressurgencia"       onclick="setFiltroStatus('ressurgencia')" style="border-color:#D97706;">
+          <span class="filtro-dot" style="background:#D97706"></span> Ressurgências
+          <span class="qtd" id="qtd-ressurgencia">—</span>
+        </button>
+      </div>
     </div>
 
     <!-- Lista de pontos -->
     <div>
       <div class="secao-titulo" style="justify-content:space-between;">
-        <span>📋 Pontos visíveis</span>
+        <span>📋 Ocorrências</span>
         <span id="contador-lista" style="font-size:0.65rem;color:var(--text2);font-weight:500;"></span>
       </div>
       <div class="pontos-lista" id="pontos-lista" style="margin-top:8px;">
@@ -266,8 +287,9 @@
     </div>
     <div class="mapa-legenda">
       <div style="font-size:0.65rem;font-weight:700;color:var(--text2);margin-bottom:2px;">LEGENDA</div>
-      <div class="legenda-item"><div class="legenda-dot" style="background:#DC2626;"></div>Foco ativo</div>
-      <div class="legenda-item"><div class="legenda-dot" style="background:#DC2626;border:2px solid #fff;box-shadow:0 0 0 2px #DC2626;"></div>Selecionado</div>
+      <div class="legenda-item"><div class="legenda-dot" style="background:#DC2626;"></div>Pendente</div>
+      <div class="legenda-item"><div class="legenda-dot" style="background:#16A34A;"></div>Resolvido</div>
+      <div class="legenda-item"><div class="legenda-dot" style="background:#D97706;"></div>Ressurgência</div>
     </div>
     <div class="carregando-overlay" id="loading-overlay">
       <div class="spinner"></div>
@@ -293,22 +315,36 @@ const SHEET_ABA = 'Coordenadas';
 const INTERVALO_SYNC_MS = 60 * 1000; // sincroniza a cada 1 minuto
 
 // ── ESTADO ───────────────────────────────────────────────────────────────────
-let _todos     = [];       // todos os pontos carregados
-let _visiveis  = [];       // pontos após filtros
-let _grupoAtivo = null;    // null = todos
+let _todos     = [];
+let _visiveis  = [];
+let _statusAtivo = 'todos';  // 'todos' | 'pendente' | 'resolvido' | 'ressurgencia'
 let _buscaTxt   = '';
 let _mapaObj    = null;
 let _camada     = null;
-let _marcadores = {};      // { indice: marker }
+let _marcadores = {};
 let _pontoSel   = null;
 let _intervalSync = null;
 
-// ── CORES POR GRUPO ───────────────────────────────────────────────────────────
-const CORES_GRUPO = [
-  '#DC2626','#D97706','#059669','#7C3AED',
-  '#DB2777','#0284C7','#65A30D','#EA580C'
-];
-function corGrupo(g) { return '#DC2626'; }
+// ── COR POR STATUS ────────────────────────────────────────────────────────────
+function corStatus(p) {
+  if (p.status === 'ressurgencia') return '#D97706';
+  if (p.status === 'resolvido')    return '#16A34A';
+  return '#DC2626'; // pendente (padrão)
+}
+
+function iconeStatus(p) {
+  if (p.status === 'ressurgencia') return '⚠️';
+  if (p.status === 'resolvido')    return '✅';
+  return '🗑️';
+}
+
+// ── STATUS DO PONTO ───────────────────────────────────────────────────────────
+// Por enquanto o Sheets não tem coluna de status — todos são "pendente"
+// Quando integrarmos com o app dos agentes, essa função lerá a coluna certa
+function detectarStatus(p) {
+  // status_limpeza virá da coluna 7 (índice 7) quando implementado
+  return p.status_limpeza || 'pendente';
+}
 
 // ── BUSCA DADOS DO SHEETS ─────────────────────────────────────────────────────
 async function buscarPontos() {
@@ -316,22 +352,23 @@ async function buscarPontos() {
   const resp  = await fetch(url);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   const texto = await resp.text();
-  // Remove o wrapper da resposta do Google (google.visualization.Query.setResponse(...))
   const jsonStr = texto.replace(/^[^(]*\(/, '').replace(/\);?\s*$/, '');
   const json  = JSON.parse(jsonStr);
 
   return json.table.rows
     .map(row => ({
-      grupo:     String(row.c[0]?.v ?? '').trim(),
-      foto:      String(row.c[1]?.v ?? '').trim(),
-      latitude:  parseFloat(row.c[2]?.v),
-      longitude: parseFloat(row.c[3]?.v),
-      data:      String(row.c[4]?.v ?? '').trim(),
-      hora:      String(row.c[5]?.v ?? '').trim(),
-      foto_url:  String(row.c[6]?.v ?? '').trim(),
+      grupo:          String(row.c[0]?.v ?? '').trim(),
+      foto:           String(row.c[1]?.v ?? '').trim(),
+      latitude:       parseFloat(row.c[2]?.v),
+      longitude:      parseFloat(row.c[3]?.v),
+      data:           String(row.c[4]?.v ?? '').trim(),
+      hora:           String(row.c[5]?.v ?? '').trim(),
+      foto_url:       String(row.c[6]?.v ?? '').trim(),
+      status_limpeza: String(row.c[7]?.v ?? '').trim() || 'pendente',
     }))
     .filter(p => !isNaN(p.latitude) && !isNaN(p.longitude)
-                 && p.latitude !== 0 && p.longitude !== 0);
+                 && p.latitude !== 0 && p.longitude !== 0)
+    .map(p => ({ ...p, status: detectarStatus(p) }));
 }
 
 // ── INICIALIZA MAPA ───────────────────────────────────────────────────────────
@@ -344,24 +381,25 @@ function iniciarMapa() {
 }
 
 // ── POPUP HTML ────────────────────────────────────────────────────────────────
-function popupHtml(p, cor) {
+function popupHtml(p) {
+  const cor = corStatus(p);
   const fotoHtml = p.foto_url && p.foto_url !== 'null' && p.foto_url !== ''
     ? `<div style="width:100%;height:160px;overflow:hidden;background:#f3f4f6;">
          <img src="${p.foto_url}" alt="Foto do foco"
            style="width:100%;height:160px;object-fit:cover;display:block;cursor:zoom-in;"
-           onerror="this.parentElement.innerHTML='<div style=\\'padding:20px;text-align:center;color:#aaa;font-size:12px;\\'>📷 Foto não disponível</div>'"
+           onerror="this.parentElement.innerHTML='<div style=\'padding:20px;text-align:center;color:#aaa;font-size:12px;\'>📷 Foto não disponível</div>'"
            onclick="abrirFoto('${p.foto_url}')">
        </div>`
     : `<div style="padding:16px;text-align:center;color:#9CA3AF;font-size:12px;background:#F9FAFB;">📷 Sem foto registrada</div>`;
-
+  const statusLabel = p.status === 'resolvido' ? '✅ Resolvido'
+    : p.status === 'ressurgencia' ? '⚠️ Ressurgência' : '🔴 Pendente';
   return `<div class="popup-inner">
-    <div class="popup-header" style="background:${cor};">📍 Foco de Lixo · G${p.grupo}</div>
+    <div class="popup-header" style="background:${cor};">📍 Foco de Lixo</div>
     ${fotoHtml}
     <div class="popup-body">
+      <div class="popup-linha"><span class="popup-label">📊 Status</span><span class="popup-valor">${statusLabel}</span></div>
       <div class="popup-linha"><span class="popup-label">📅 Data</span><span class="popup-valor">${p.data||'—'}</span></div>
       <div class="popup-linha"><span class="popup-label">⏰ Hora</span><span class="popup-valor">${p.hora||'—'}</span></div>
-      <div class="popup-linha"><span class="popup-label">👥 Equipe</span><span class="popup-valor">Grupo ${p.grupo}</span></div>
-      <div class="popup-linha"><span class="popup-label">📸 Arquivo</span><span class="popup-valor" style="font-size:0.65rem;">${p.foto||'—'}</span></div>
       <div class="popup-linha">
         <span class="popup-label">🌐 GPS</span>
         <span class="popup-valor" style="font-size:0.65rem;font-family:monospace;">${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}</span>
@@ -377,7 +415,7 @@ function renderizarMapa() {
 
   const bounds = [];
   _visiveis.forEach((p, i) => {
-    const cor = corGrupo(p.grupo);
+    const cor = corStatus(p);
     const marcador = L.circleMarker([p.latitude, p.longitude], {
       radius: 7, color: 'white', weight: 1.5,
       fillColor: cor, fillOpacity: 0.9
@@ -390,7 +428,7 @@ function renderizarMapa() {
       if (_pontoSel !== i) this.setStyle({ radius: 7, fillOpacity: 0.9 });
     });
     marcador.on('click', () => selecionarPonto(i));
-    marcador.bindPopup(popupHtml(p, cor), { maxWidth: 240 });
+    marcador.bindPopup(popupHtml(p), { maxWidth: 240 });
     marcador.addTo(_camada);
     _marcadores[i] = marcador;
     bounds.push([p.latitude, p.longitude]);
@@ -416,19 +454,20 @@ function renderizarLista() {
   const exibidos = _visiveis.slice(0, 100);
   lista.innerHTML = '';
   exibidos.forEach((p, i) => {
-    const cor = corGrupo(p.grupo);
+    const cor = corStatus(p);
     const item = document.createElement('div');
     item.className = 'ponto-item' + (i === _pontoSel ? ' destaque' : '');
     item.innerHTML = `
       <div class="ponto-icone" style="background:${cor}22;">
-        <span style="font-size:0.9rem;">📍</span>
+        <span style="font-size:0.9rem;">${iconeStatus(p)}</span>
       </div>
       <div class="ponto-info">
-        <div class="ponto-grupo">Grupo ${p.grupo} · ${p.foto||'—'}</div>
+        <div class="ponto-grupo">${p.data||'—'} ${p.hora||''}</div>
         <div class="ponto-coord">${p.latitude.toFixed(5)}, ${p.longitude.toFixed(5)}</div>
-        <div class="ponto-data">${p.data||''} ${p.hora||''}</div>
       </div>
-      <span class="ponto-badge" style="background:${cor}22;color:${cor};">G${p.grupo}</span>
+      <span class="ponto-badge" style="background:${cor}22;color:${cor};">
+        ${p.status === 'resolvido' ? 'Limpo' : p.status === 'ressurgencia' ? 'Voltou' : 'Pendente'}
+      </span>
     `;
     item.onclick = () => selecionarPonto(i);
     lista.appendChild(item);
@@ -437,7 +476,7 @@ function renderizarLista() {
   if (_visiveis.length > 100) {
     const mais = document.createElement('div');
     mais.className = 'ultima-atualizacao';
-    mais.textContent = `+ ${_visiveis.length - 100} pontos não listados — use o mapa ou filtre por grupo`;
+    mais.textContent = `+ ${_visiveis.length - 100} pontos não listados — use o mapa ou filtre por status`;
     lista.appendChild(mais);
   }
 }
@@ -482,57 +521,43 @@ document.addEventListener('keydown', e => {
 
 // ── MÉTRICAS ──────────────────────────────────────────────────────────────────
 function atualizarMetricas() {
-  document.getElementById('met-total').textContent = _todos.length;
-  const grupos = new Set(_todos.map(p => p.grupo));
-  document.getElementById('met-grupos').textContent = grupos.size;
-  const hoje = new Date().toISOString().slice(0, 10);
-  const countHoje = _todos.filter(p => p.data === hoje).length;
-  document.getElementById('met-hoje').textContent = countHoje;
+  const pendentes     = _todos.filter(p => p.status === 'pendente').length;
+  const resolvidos    = _todos.filter(p => p.status === 'resolvido').length;
+  const ressurgencias = _todos.filter(p => p.status === 'ressurgencia').length;
+  document.getElementById('met-total').textContent         = _todos.length;
+  document.getElementById('met-pendentes').textContent     = pendentes;
+  document.getElementById('met-resolvidos').textContent    = resolvidos;
+  document.getElementById('met-ressurgencias').textContent = ressurgencias;
+  document.getElementById('qtd-todos').textContent         = _todos.length;
+  document.getElementById('qtd-pendente').textContent      = pendentes;
+  document.getElementById('qtd-resolvido').textContent     = resolvidos;
+  document.getElementById('qtd-ressurgencia').textContent  = ressurgencias;
 }
 
-// ── FILTROS POR GRUPO ─────────────────────────────────────────────────────────
-function renderizarFiltros() {
-  const wrap = document.getElementById('filtros-grupos');
-  const grupos = [...new Set(_todos.map(p => p.grupo))].sort();
-
-  wrap.innerHTML = '';
-
-  // Botão "Todos"
-  const btnTodos = document.createElement('button');
-  btnTodos.className = 'filtro-btn' + (_grupoAtivo === null ? ' ativo' : '');
-  btnTodos.innerHTML = `<span class="filtro-dot" style="background:var(--azul-vivo)"></span> Todos os grupos <span class="qtd">${_todos.length}</span>`;
-  btnTodos.onclick = () => { _grupoAtivo = null; aplicarFiltros(); };
-  wrap.appendChild(btnTodos);
-
-  grupos.forEach(g => {
-    const cor = corGrupo(g);
-    const qtd = _todos.filter(p => p.grupo === g).length;
-    const btn = document.createElement('button');
-    btn.className = 'filtro-btn' + (_grupoAtivo === g ? ' ativo' : '');
-    btn.innerHTML = `<span class="filtro-dot" style="background:${cor}"></span> Grupo ${g} <span class="qtd">${qtd}</span>`;
-    btn.onclick = () => { _grupoAtivo = g; aplicarFiltros(); };
-    wrap.appendChild(btn);
+function setFiltroStatus(status) {
+  _statusAtivo = status;
+  ['todos','pendente','resolvido','ressurgencia'].forEach(s => {
+    const btn = document.getElementById('filtro-' + s);
+    if (btn) btn.className = 'filtro-btn' + (s === status ? ' ativo' : '');
   });
+  aplicarFiltros();
 }
 
-// ── BUSCA ─────────────────────────────────────────────────────────────────────
 function filtrarLista() {
   _buscaTxt = document.getElementById('input-busca').value.toLowerCase().trim();
   aplicarFiltros();
 }
 
-// ── APLICA FILTROS ────────────────────────────────────────────────────────────
 function aplicarFiltros() {
   _visiveis = _todos.filter(p => {
-    if (_grupoAtivo !== null && p.grupo !== _grupoAtivo) return false;
+    if (_statusAtivo !== 'todos' && p.status !== _statusAtivo) return false;
     if (_buscaTxt) {
-      const haystack = `${p.grupo} ${p.foto} ${p.data} ${p.hora} ${p.latitude} ${p.longitude}`.toLowerCase();
-      if (!haystack.includes(_buscaTxt)) return false;
+      const h = `${p.data} ${p.hora} ${p.latitude} ${p.longitude} ${p.status}`.toLowerCase();
+      if (!h.includes(_buscaTxt)) return false;
     }
     return true;
   });
   _pontoSel = null;
-  renderizarFiltros();
   renderizarLista();
   renderizarMapa();
 }
@@ -554,7 +579,6 @@ async function sincronizar(silencioso = false) {
 
     aplicarFiltros();
     atualizarMetricas();
-    renderizarFiltros();
 
     // Status de sucesso
     dot.className = 'dot-sync';
