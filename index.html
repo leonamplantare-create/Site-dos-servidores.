@@ -24,21 +24,29 @@
   }
 
   * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
-  body { font-family: 'Inter', sans-serif; background: var(--areia); color: var(--text); min-height: 100vh; }
+  
+  html, body { 
+    height: 100%; 
+    overflow: hidden; /* Trava qualquer rolagem vertical na tela inteira */
+    background: var(--areia); 
+    color: var(--text); 
+    font-family: 'Inter', sans-serif; 
+  }
 
   /* ── TOPO ── */
   .topo {
     background: linear-gradient(135deg, var(--azul) 0%, #0F2D5A 100%);
-    padding: 10px 18px;
-    position: sticky; top: 0; z-index: 500;
+    padding: 10px 16px;
+    position: relative;
+    z-index: 1100; /* Fica acima da gaveta mobile */
     box-shadow: 0 2px 12px rgba(0,0,0,0.2);
     display: flex; align-items: center; gap: 12px;
     height: 56px;
   }
   .topo-icone { font-size: 1.5rem; }
-  .topo-titulo { color: white; flex: 1; }
-  .topo-titulo h1 { font-family: 'Fredoka', sans-serif; font-size: 1.05rem; font-weight: 600; line-height: 1.2; }
-  .topo-titulo p  { font-size: 0.68rem; opacity: 0.75; margin-top: 1px; }
+  .topo-titulo { color: white; flex: 1; min-width: 0; }
+  .topo-titulo h1 { font-family: 'Fredoka', sans-serif; font-size: 1.05rem; font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .topo-titulo p  { font-size: 0.68rem; opacity: 0.75; margin-top: 1px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   
   /* Botão de Menu no Topo */
   .topo-menu-btn {
@@ -70,43 +78,80 @@
   @keyframes pulsar { 0%,100%{opacity:1;transform:scale(1)} 50%{opacity:.5;transform:scale(1.3)} }
   .dot-sync.erro { background: #F87171; animation: none; }
 
-  /* ── LAYOUT OPERACIONAL DINÂMICO ── */
+  /* ── LAYOUT OPERACIONAL TOTALMENTE RESPONSIVO ── */
   .layout { 
-    display: grid; 
-    grid-template-columns: 340px 1fr; 
+    display: flex; 
+    width: 100%; 
     height: calc(100vh - 56px); 
-    transition: grid-template-columns 0.35s cubic-bezier(0.4, 0, 0.2, 1);
-  }
-  
-  /* Estado quando o menu lateral está recolhido */
-  .layout.collapsed {
-    grid-template-columns: 0px 1fr;
-  }
-
-  @media(max-width: 768px) {
-    .layout { display: flex; flex-direction: column; height: auto; }
-    .layout.collapsed .painel-lateral { display: none; }
+    position: relative;
+    overflow: hidden;
   }
 
   /* ── PAINEL LATERAL ── */
   .painel-lateral {
-    background: white; border-right: 1px solid var(--borda);
+    background: white; 
+    border-right: 1px solid var(--borda);
+    width: 340px;
+    height: 100%;
     overflow-y: auto; 
-    overflow-x: hidden; /* Garante que o texto não esprema na animação */
+    overflow-x: hidden;
     padding: 14px;
-    display: flex; flex-direction: column; gap: 12px;
-    transition: padding 0.35s ease, opacity 0.2s ease;
-    min-width: 0;
+    display: flex; 
+    flex-direction: column; 
+    gap: 12px;
+    transition: margin-left 0.35s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.2s ease;
+    flex-shrink: 0;
+    z-index: 1005;
   }
   .painel-lateral::-webkit-scrollbar { width: 4px; }
   .painel-lateral::-webkit-scrollbar-thumb { background: var(--borda); border-radius: 4px; }
 
-  /* Oculta conteúdo suavemente ao colapsar */
+  /* Estado recolhido (Desktop) */
   .layout.collapsed .painel-lateral {
-    padding: 0;
-    border-right: none;
+    margin-left: -340px;
     opacity: 0;
     pointer-events: none;
+  }
+
+  /* ── PELÍCULA ESCURA DE FUNDO (MOBILE BACKDROP) ── */
+  .sidebar-backdrop {
+    display: none;
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    z-index: 1002;
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+  }
+
+  /* ── AJUSTES PARA DISPOSITIVOS MÓVEIS (GAVETA FLUTUANTE) ── */
+  @media(max-width: 768px) {
+    .painel-lateral {
+      position: absolute;
+      top: 0; 
+      left: 0; 
+      bottom: 0;
+      width: 295px; /* Tamanho otimizado para telas pequenas */
+      margin-left: 0 !important; /* Ignora o margin do desktop */
+      transform: translateX(0); /* Aberto por padrão se ativo */
+      transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 4px 0 24px rgba(0,0,0,0.18);
+      opacity: 1 !important;
+    }
+
+    /* Esconde a gaveta jogando para fora da tela */
+    .layout.collapsed .painel-lateral {
+      transform: translateX(-100%);
+      pointer-events: none;
+    }
+
+    /* Ativa a máscara escura quando a gaveta estiver aberta no celular */
+    .layout:not(.collapsed) .sidebar-backdrop {
+      display: block;
+      opacity: 1;
+      pointer-events: auto;
+    }
   }
 
   /* ── MÉTRICAS ── */
@@ -174,10 +219,17 @@
   .busca-wrap input:focus { border-color: var(--azul-vivo); background: white; }
   .busca-icon { position: absolute; left: 10px; top: 50%; transform: translateY(-50%); font-size: 0.8rem; }
 
-  /* ── MAPA ── */
-  .mapa-wrap { position: relative; flex: 1; }
-  #mapa { width: 100%; height: 100%; min-height: 400px; }
-  @media(max-width: 768px) { #mapa { height: 50vh; } }
+  /* ── MAPA RENDERIZADO EM TELA CHEIA ── */
+  .mapa-wrap { 
+    position: relative; 
+    flex: 1; 
+    height: 100%; 
+    width: 100%;
+  }
+  #mapa { 
+    width: 100%; 
+    height: 100%; 
+  }
 
   /* ── BARRA STATUS MAPA ── */
   .mapa-status {
@@ -226,7 +278,7 @@
   .carregando-overlay {
     position: absolute; inset: 0; background: rgba(248,247,242,0.9);
     display: flex; flex-direction: column; align-items: center; justify-content: center;
-    z-index: 300; gap: 12px;
+    z-index: 1090; gap: 12px;
   }
   .spinner { width: 36px; height: 36px; border: 3px solid var(--borda); border-top-color: var(--azul-vivo); border-radius: 50%; animation: girar 0.7s linear infinite; }
   .carregando-txt { font-size: 0.82rem; color: var(--text2); font-weight: 500; }
@@ -260,6 +312,8 @@
 </div>
 
 <div class="layout" id="layout-app">
+
+  <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="toggleSidebar()"></div>
 
   <div class="painel-lateral">
 
@@ -354,7 +408,7 @@
 // ── CONFIGURAÇÃO ─────────────────────────────────────────────────────────────
 const SHEET_ID  = '1Q9hG2uVnnP0kbKCdiVjUWwhW6Bi9TjajEYXS0dlZMsk';
 const SHEET_ABA = 'Coordenadas';
-const INTERVALO_SYNC_MS = 60 * 1000; // sincroniza a cada 1 minuto
+const INTERVALO_SYNC_MS = 60 * 1000; // Sincroniza a cada 1 minuto
 
 // ── ESTADO ───────────────────────────────────────────────────────────────────
 let _todos     = [];
@@ -605,8 +659,7 @@ function toggleSidebar() {
   layout.classList.toggle('collapsed');
   
   // CORREÇÃO LEAFLET: Quando a largura do container muda dinamicamente,
-  // precisamos mandar o Leaflet atualizar os seus cálculos de renderização,
-  // senão o mapa fica parcialmente cinza/vazio ou fora de centro.
+  // mandamos o Leaflet atualizar os seus cálculos de renderização para não bugar
   setTimeout(() => {
     if (_mapaObj) {
       _mapaObj.invalidateSize({ animate: true });
@@ -653,6 +706,11 @@ async function sincronizar(silencioso = false) {
 
 // ── INICIALIZAÇÃO ─────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
+  // Se for celular/tablet (largura <= 768px), inicia com o menu recolhido automaticamente
+  if (window.innerWidth <= 768) {
+    document.getElementById('layout-app').classList.add('collapsed');
+  }
+  
   iniciarMapa();
   await sincronizar();
 
