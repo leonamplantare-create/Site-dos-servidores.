@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>De Olho no Lixo da Ilha — Mapa</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
 <style>
 *{box-sizing:border-box;margin:0;padding:0}
 body{font-family:'Segoe UI',sans-serif;background:#f5f5f0;color:#2d3748;}
@@ -62,12 +62,7 @@ const COR_ALUNO = '#e53e3e';
 let _corGrupo = {};
 
 // ── Mapa ─────────────────────────────────────────────────────────
-const map = L.map('map').setView([-7.748,-34.831],13);
-L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
-    attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(map);
-
-let _modo = 'alunos';
-let _camAl = null, _camAg = null;
+let map, _modo = 'alunos', _camAl = null, _camAg = null;
 
 // ── Ícones SVG (igual ao app) ────────────────────────────────────
 function pinHTML(cor, tipo) {
@@ -207,10 +202,15 @@ function atualizarLegenda(){
 
 // ── Init ─────────────────────────────────────────────────────────
 async function init(){
+    // Inicializar mapa aqui garante que Leaflet já carregou
+    map = L.map('map').setView([-7.748,-34.831],13);
+    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
+        attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(map);
+
     if(!SHEET_ID||SHEET_ID.includes('COLE_')){
         document.getElementById('load').innerHTML='<div style="font-size:2rem;">&#9888;</div>'
             +'<b>Configure o SHEET_ID no index.html</b>'
-            +'<p style="font-size:0.8rem;color:#718096;margin-top:6px;">Substitua 1c7rQoSxD5apQhLZwoJ1penV76GVH1gkdvjl16OrsVEU pelo ID real.</p>';
+            +'<p style="font-size:0.8rem;color:#718096;margin-top:6px;">Substitua 1Q9hG2uVnnP0kbKCdiVjUWwhW6Bi9TjajEYXS0dlZMsk pelo ID real.</p>';
         return;
     }
     try{
@@ -231,7 +231,7 @@ async function init(){
         document.getElementById('load').innerHTML='<div style="font-size:2rem;">&#9888;</div><b>Erro ao carregar</b><p style="font-size:0.8rem;color:#718096;margin-top:6px;">'+e.message+'</p>';
     }
 }
-init();
+window.addEventListener('load', init);
 </script>
 </body>
 </html>
