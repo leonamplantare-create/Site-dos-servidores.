@@ -39,6 +39,11 @@ header p{font-size:0.72rem;opacity:.8;}
   <button class="btn-t on" id="btn-al"  onclick="setModo('alunos')">&#128100; Alunos</button>
   <button class="btn-t"    id="btn-ag"  onclick="setModo('agentes')">&#128119; Agentes</button>
   <button class="btn-t"    id="btn-amb" onclick="setModo('ambos')">&#127758; Ambos</button>
+  <div style="width:1px;background:#ddd;margin:0 4px;align-self:stretch;"></div>
+  <button class="btn-t on" id="filt-todos"     onclick="setFiltroTipo('todos')"">Todos</button>
+  <button class="btn-t"    id="filt-lixo"      onclick="setFiltroTipo('lixo')">&#128465; Lixo</button>
+  <button class="btn-t"    id="filt-poda"      onclick="setFiltroTipo('poda')">&#127795; Poda</button>
+  <button class="btn-t"    id="filt-lixo_poda" onclick="setFiltroTipo('lixo_poda')">&#127795;&#128465; Lixo+Poda</button>
   <div class="chips">
     <span class="chip" id="stat-al">0 pontos alunos</span>
     <span class="chip ag" id="stat-ag">0 pontos agentes</span>
@@ -53,7 +58,7 @@ header p{font-size:0.72rem;opacity:.8;}
 
 <script>
 // ── CONFIG ──────────────────────────────────────────────────────
-const SHEET_ID   = '1Q9hG2uVnnP0kbKCdiVjUWwhW6Bi9TjajEYXS0dlZMsk';
+const SHEET_ID   = '1c7rQoSxD5apQhLZwoJ1penV76GVH1gkdvjl16OrsVEU';
 const ABA_ALUNOS = 'Coordenadas';
 const ABA_AGENTES= 'Agentes';
 
@@ -63,6 +68,32 @@ let _corGrupo = {};
 
 // ── Mapa ─────────────────────────────────────────────────────────
 let map, _modo = 'alunos', _camAl = null, _camAg = null;
+let _filtroTipo = 'todos';
+let _dadosAl = [], _dadosAg = [];
+
+function setFiltroTipo(tipo) {
+    _filtroTipo = tipo;
+    ['todos','lixo','poda','lixo_poda'].forEach(t => {
+        document.getElementById('filt-'+t)?.classList.toggle('on', t === tipo);
+    });
+    _reaplicarCamadas();
+}
+
+function _filtrarPontos(lista) {
+    if (_filtroTipo === 'todos') return lista;
+    return lista.filter(p => (p.tipo_residuo || 'lixo') === _filtroTipo);
+}
+
+function _reaplicarCamadas() {
+    if (!map) return;
+    if (_camAl) map.removeLayer(_camAl);
+    if (_camAg) map.removeLayer(_camAg);
+    _camAl = camadaAlunos(_filtrarPontos(_dadosAl));
+    _camAg = camadaAgentes(_filtrarPontos(_dadosAg));
+    if (_modo !== 'agentes') _camAl.addTo(map);
+    if (_modo !== 'alunos')  _camAg.addTo(map);
+    atualizarLegenda();
+}
 
 // ── Ícones SVG (igual ao app) ────────────────────────────────────
 function pinHTML(cor, tipo) {
@@ -172,7 +203,8 @@ function camadaAgentes(rows) {
 function setModo(modo){
     _modo=modo;
     ['alunos','agentes','ambos'].forEach(m=>{
-        document.getElementById('btn-'+m.replace('alunos','al').replace('agentes','ag').replace('ambos','amb')).classList.toggle('on',m===modo);
+        const id='btn-'+m.replace('alunos','al').replace('agentes','ag').replace('ambos','amb');
+        document.getElementById(id)?.classList.toggle('on',m===modo);
     });
     if(_camAl) map.removeLayer(_camAl);
     if(_camAg) map.removeLayer(_camAg);
@@ -210,7 +242,7 @@ async function init(){
     if(!SHEET_ID||SHEET_ID.includes('COLE_')){
         document.getElementById('load').innerHTML='<div style="font-size:2rem;">&#9888;</div>'
             +'<b>Configure o SHEET_ID no index.html</b>'
-            +'<p style="font-size:0.8rem;color:#718096;margin-top:6px;">Substitua 1Q9hG2uVnnP0kbKCdiVjUWwhW6Bi9TjajEYXS0dlZMsk pelo ID real.</p>';
+            +'<p style="font-size:0.8rem;color:#718096;margin-top:6px;">Substitua 1c7rQoSxD5apQhLZwoJ1penV76GVH1gkdvjl16OrsVEU pelo ID real.</p>';
         return;
     }
     try{
@@ -218,12 +250,11 @@ async function init(){
             lerAba(ABA_ALUNOS).catch(()=>[]),
             lerAba(ABA_AGENTES).catch(()=>[]),
         ]);
-        _camAl = camadaAlunos(rAl);
-        _camAg = camadaAgentes(rAg);
+        _dadosAl = rAl;
+        _dadosAg = rAg;
         document.getElementById('stat-al').textContent = rAl.length+' pontos alunos';
         document.getElementById('stat-ag').textContent = rAg.length+' pontos agentes';
-        _camAl.addTo(map);
-        atualizarLegenda();
+        _reaplicarCamadas();
         const todos = [...rAl,...rAg].filter(r=>!isNaN(parseFloat(r.latitude))).map(r=>[parseFloat(r.latitude),parseFloat(r.longitude)]);
         if(todos.length) map.fitBounds(L.latLngBounds(todos),{padding:[20,20]});
         document.getElementById('load').style.display='none';
