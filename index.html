@@ -184,12 +184,16 @@ function camadaAgentes(rows) {
         if(isNaN(lat)||isNaN(lon)) return;
         const st  = r.status||'novo_ponto';
         const cor = _cores[st]||'#718096';
+        const refInfo = r.ref_grupo
+            ? '<br><b>Ref:</b> G'+r.ref_grupo+'/'+r.ref_foto+' ('+r.ref_distancia+'m)'
+            : '';
         const fotoHtml = criarImgComFallback(r._foto_urls, 'width:100%;max-height:180px;object-fit:cover;border-radius:4px 4px 0 0;display:block;');
         const popup = '<div style="min-width:200px;">'
             + fotoHtml
             +'<div style="background:'+cor+';color:#fff;font-weight:700;padding:6px 12px;font-size:12px;">&#128119; Fiscal \u2014 '+(_labels[st]||st)+'</div>'
             +'<div style="padding:8px 12px;">'
             +'<div style="font-size:12px;line-height:1.9;color:#2d3748;">'
+            +'<b>Foto:</b> '+(r.foto||'--')+'<br>'
             +'<b>Tipo:</b> '+(_tipos[r.tipo_residuo]||'--')+'<br>'
             +'<b>Data:</b> '+(r.data||'--')+' '+(r.hora||'')+'<br>'
             +'<b>Coord.:</b> '+lat.toFixed(6)+', '+lon.toFixed(6)+refInfo
