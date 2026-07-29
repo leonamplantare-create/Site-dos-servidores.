@@ -387,18 +387,26 @@ async function init(){
     }
     try{
         const [rAl,rAg] = await Promise.all([
-            lerAba(ABA_ALUNOS).catch(()=>[]),
-            lerAba(ABA_AGENTES).catch(()=>[]),
+            lerAba(ABA_ALUNOS).catch(e=>{ console.error('[alunos]',e); return []; }),
+            lerAba(ABA_AGENTES).catch(e=>{ console.error('[agentes]',e); return []; }),
         ]);
         _dadosAl = rAl;
         _dadosAg = rAg;
+        console.log('[index] alunos:', rAl.length, 'agentes:', rAg.length);
         document.getElementById('stat-al').textContent = rAl.length+' pontos alunos';
         document.getElementById('stat-ag').textContent = rAg.length+' pontos agentes';
+        if (!rAl.length && !rAg.length) {
+            document.getElementById('load').innerHTML='<div style="font-size:2rem;">&#9888;</div>'
+                +'<b>Nenhum dado encontrado</b>'
+                +'<p style="font-size:0.8rem;color:#718096;margin-top:6px;">Verifique se a planilha está pública e as abas "'+ABA_ALUNOS+'" e "'+ABA_AGENTES+'" existem.<br>Abra o console (F12) para mais detalhes.</p>';
+            return;
+        }
         _reaplicarCamadas();
         const todos = [...rAl,...rAg].filter(r=>!isNaN(parseFloat(r.latitude))).map(r=>[parseFloat(r.latitude),parseFloat(r.longitude)]);
         if(todos.length) map.fitBounds(L.latLngBounds(todos),{padding:[20,20]});
         document.getElementById('load').style.display='none';
     }catch(e){
+        console.error('[index] erro geral:', e);
         document.getElementById('load').innerHTML='<div style="font-size:2rem;">&#9888;</div><b>Erro ao carregar</b><p style="font-size:0.8rem;color:#718096;margin-top:6px;">'+e.message+'</p>';
     }
 }
