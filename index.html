@@ -109,7 +109,6 @@ async function lerAba(aba) {
     const res = await fetch(url);
     if (!res.ok) throw new Error('HTTP '+res.status+' ao buscar a aba "'+aba+'"');
     const txt = await res.text();
-    // Remove o wrapper google.visualization.Query.setResponse(...)
     const jsonStr = txt.replace(/^[^\(]+\(/,'').replace(/\);?\s*$/,'');
     let json;
     try {
@@ -125,11 +124,9 @@ async function lerAba(aba) {
         cols.forEach((c,i) => {
             const val = row.c && row.c[i] ? (row.c[i].v ?? row.c[i].f ?? '') : '';
             o[c] = val;
-            // também grava em minúsculo para facilitar
             o[c.toLowerCase()] = val;
         });
 
-        // Normaliza campos mais usados
         o.latitude  = parseFloat(o.latitude  || o.lat  || o.Latitude  || o.LATITUDE  || '');
         o.longitude = parseFloat(o.longitude || o.lng  || o.lon || o.Longitude || o.LONGITUDE || '');
         o.grupo     = o.grupo || o.Grupo || '';
@@ -139,7 +136,6 @@ async function lerAba(aba) {
         o.data      = o.data || o.Data || '';
         o.hora      = o.hora || o.Hora || '';
 
-        // Coleta todas as colunas foto_url_N
         const urls = [];
         let n = 1;
         while (o['foto_url_'+n] !== undefined || o['foto_url_'+n.toString()] !== undefined) {
@@ -249,9 +245,26 @@ function atualizarLegenda(){
     el.innerHTML = h;
 }
 
+// ── Força o foco nos pontos ──────────────────────────────────────
+function focarNosPontos() {
+    const todos = [..._dadosAl, ..._dadosAg]
+        .filter(r => !isNaN(r.latitude) && !isNaN(r.longitude))
+        .map(r => [r.latitude, r.longitude]);
+
+    if (todos.length === 0) return;
+
+    const bounds = L.latLngBounds(todos);
+    // Força o enquadramento com padding e limita o zoom máximo
+    map.fitBounds(bounds, {
+        padding: [40, 40],
+        maxZoom: 16,          // não deixa zoomar demais se tiver poucos pontos
+        animate: true
+    });
+}
+
 // ── Init ─────────────────────────────────────────────────────────
 async function init(){
-    map = L.map('map').setView([-7.748,-34.831],13);
+    map = L.map('map').setView([-7.748, -34.831], 13);
     L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
         attribution:'&copy; OpenStreetMap &copy; CARTO', maxZoom:19
     }).addTo(map);
@@ -274,22 +287,22 @@ async function init(){
 
         _reaplicarCamadas();
 
-        const todos = [...rAl, ...rAg]
-            .filter(r => !isNaN(r.latitude) && !isNaN(r.longitude))
-            .map(r => [r.latitude, r.longitude]);
+        // FORÇA o foco nos pontos logo após carregar as camadas
+        setTimeout(() => {
+            focarNosPontos();
+            document.getElementById('load').style.display = 'none';
+        }, 150);
 
-        if (todos.length) {
-            map.fitBounds(L.latLngBounds(todos), {padding:[30,30]});
-        } else {
-            // Nenhum ponto válido
+        // Se não tiver nenhum ponto válido
+        const temPontos = [...rAl, ...rAg].some(r => !isNaN(r.latitude) && !isNaN(r.longitude));
+        if (!temPontos) {
             document.getElementById('load').innerHTML =
                 '<div style="font-size:2rem;">⚠</div>'
                 +'<b>Nenhum ponto encontrado</b>'
                 +'<p style="font-size:0.85rem;color:#718096;margin-top:8px;max-width:320px;">'
                 +'Verifique se a planilha está compartilhada como <b>“Qualquer pessoa com o link”</b> e se as abas se chamam exatamente <b>Coordenadas</b> e <b>Agentes</b>.</p>';
-            return;
         }
-        document.getElementById('load').style.display = 'none';
+
     } catch(e) {
         console.error(e);
         document.getElementById('load').innerHTML =
