@@ -323,18 +323,26 @@ function camadaAgentes(rows) {
                 +'<div class="hist-foto-wrap">'
                 +criarImgComFallback(r._foto_urls, 'width:100%;max-height:160px;object-fit:contain;background:#000;display:block;')
                 +'</div>'
-                // Slide info
+                // Info fixa do ponto atual
+                +'<div style="padding:6px 12px;font-size:11px;color:#718096;border-bottom:1px solid #edf2f7;">'
+                +'<b style="color:#2d3748;">'+r.foto+'</b>'
+                +' &nbsp;|&nbsp; '+(r.data||'--')+' '+(r.hora||'')
+                +'<br>Coord.: '+lat.toFixed(5)+', '+lon.toFixed(5)
+                +'<br>Tipo: '+(_tipos[r.tipo_residuo]||'--')
+                +'</div>'
+                // Slide histórico
                 +'<div id="hist-slide-'+chave+'" style="padding:8px 10px;"></div>'
                 +'</div>';
         } else {
             const fotoHtml = criarImgComFallback(r._foto_urls, 'width:100%;max-height:160px;object-fit:contain;background:#000;border-radius:4px 4px 0 0;display:block;');
-            popup = '<div style="min-width:200px;">'
+            popup = '<div style="min-width:220px;">'
                 +fotoHtml
                 +'<div style="background:'+cor+';color:#fff;font-weight:700;padding:6px 12px;font-size:12px;">&#128119; Fiscal — '+(_labels[st]||st)+'</div>'
                 +'<div style="padding:8px 12px;font-size:12px;line-height:1.9;color:#2d3748;">'
                 +'<b>Foto:</b> '+(r.foto||'--')+'<br>'
                 +'<b>Tipo:</b> '+(_tipos[r.tipo_residuo]||'--')+'<br>'
-                +'<b>Data:</b> '+(r.data||'--')+' '+(r.hora||'')
+                +'<b>Data:</b> '+(r.data||'--')+' '+(r.hora||'')+'<br>'
+                +'<b>Coord.:</b> '+lat.toFixed(6)+', '+lon.toFixed(6)
                 +'</div></div>';
         }
 
