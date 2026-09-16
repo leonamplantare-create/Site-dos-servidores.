@@ -365,14 +365,15 @@ function camadaAlunos(rows) {
         const lat=parseFloat(r.latitude), lon=parseFloat(r.longitude);
         if(isNaN(lat)||isNaN(lon)||!_coordValida(lat,lon)) return;
         _pinCount++;
-        const cor = COR_ALUNO;
-        const tipo= r.tipo_residuo||'lixo';
+        const tipo = r.tipo_residuo||'lixo';
 
         const chaveAl = r.grupo+'_'+r.foto;
         const agRefs = (_alRef[chaveAl]||[]).slice().sort((a,b)=>((a.data||'')+(a.hora||'')).localeCompare((b.data||'')+(b.hora||'')));
         const temHist = agRefs.length > 0;
+        const temRecorr = agRefs.some(ag => ag.status === 'recorrencia' || ag.status === 'analise_operador');
+        const cor = temRecorr ? '#d69e2e' : COR_ALUNO;
 
-        const slides = [{ urls: r._foto_urls||[], caption: 'Grupo '+r.grupo+' · '+(r.foto||'')+(r.data?' · '+r.data:''), cor, lat, lon, tipo, label:'Ponto novo', data:r.data }];
+        const slides = [{ urls: r._foto_urls||[], caption: 'Grupo '+r.grupo+' · '+(r.foto||'')+(r.data?' · '+r.data:''), cor, lat, lon, tipo, label: temRecorr ? 'Ponto original' : 'Ponto novo', data:r.data }];
         agRefs.forEach(ag => {
             const _cores = {'recorrencia':'#d69e2e','limpo':'#38a169','analise_operador':'#d69e2e'};
             const _labels = {'recorrencia':'Recorrência','limpo':'Local limpo','analise_operador':'Recorrência'};
