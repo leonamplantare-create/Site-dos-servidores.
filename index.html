@@ -165,26 +165,26 @@ function _reaplicarCamadas() {
 function pinHTML(cor, tipo, corBairro) {
     const emoji = {'lixo':'🗑','poda':'🌳','lixo_poda':'🌳🗑','limpo':'✓','analise':'⚠'}[tipo]||'🗑';
     const sombra = corBairro
-        ? '0 0 0 3px '+corBairro+', 0 2px 8px rgba(0,0,0,0.4)'
-        : '0 2px 6px rgba(0,0,0,0.3)';
-    return '<div style="position:relative;width:32px;height:42px;">'
+        ? '0 0 0 2px '+corBairro+', 0 2px 6px rgba(0,0,0,0.4)'
+        : '0 2px 5px rgba(0,0,0,0.3)';
+    return '<div style="position:relative;width:22px;height:30px;">'
         +'<div style="'
-        +'width:32px;height:32px;border-radius:50% 50% 50% 0;'
+        +'width:22px;height:22px;border-radius:50% 50% 50% 0;'
         +'background:'+cor+';border:2px solid #fff;'
         +'transform:rotate(-45deg);'
         +'box-shadow:'+sombra+';'
         +'position:absolute;top:0;left:0;'
         +'"></div>'
         +'<div style="'
-        +'position:absolute;top:2px;left:2px;'
-        +'width:28px;height:28px;'
+        +'position:absolute;top:1px;left:1px;'
+        +'width:20px;height:20px;'
         +'display:flex;align-items:center;justify-content:center;'
-        +'font-size:13px;line-height:1;z-index:1;'
+        +'font-size:9px;line-height:1;z-index:1;'
         +'">'+emoji+'</div>'
         +'</div>';
 }
-function icone(cor,tipo){ return L.divIcon({className:'',html:pinHTML(cor,tipo,''),iconSize:[32,42],iconAnchor:[16,42],popupAnchor:[0,-44]}); }
-function iconeComBairro(cor,tipo,corBairro){ return L.divIcon({className:'',html:pinHTML(cor,tipo,corBairro),iconSize:[32,42],iconAnchor:[16,42],popupAnchor:[0,-44]}); }
+function icone(cor,tipo){ return L.divIcon({className:'',html:pinHTML(cor,tipo,''),iconSize:[22,30],iconAnchor:[11,30],popupAnchor:[0,-32]}); }
+function iconeComBairro(cor,tipo,corBairro){ return L.divIcon({className:'',html:pinHTML(cor,tipo,corBairro),iconSize:[22,30],iconAnchor:[11,30],popupAnchor:[0,-32]}); }
 function tipoAg(st,tp){ if(st==='limpo')return 'limpo'; if(st==='analise_operador')return 'analise'; return tp||'lixo'; }
 
 function lerAba(aba) {
@@ -476,24 +476,29 @@ function camadaAgentes(rows) {
 
 function camadaEscolas(rows) {
     const layer = L.layerGroup();
-    const _cores  = {'novo_ponto':'#e53e3e','recorrencia':'#d69e2e','limpo':'#38a169','analise_operador':'#d69e2e'};
-    const _labels = {'novo_ponto':'Ponto sem registro','recorrencia':'Recorrência','limpo':'Local limpo','analise_operador':'Recorrência'};
-    const _tipos  = {'lixo':'Lixo','poda':'Poda','lixo_poda':'Lixo+poda'};
+    const _tipos  = {'lixo':'Lixo','poda':'Poda','lixo_poda':'Lixo+poda','indefinido':'--'};
 
     rows.forEach(r => {
         const lat = parseFloat(r.latitude), lon = parseFloat(r.longitude);
         if (isNaN(lat) || isNaN(lon) || !_coordValida(lat, lon)) return;
-        const st  = r.status || 'novo_ponto';
-        const cor = _cores[st] || '#718096';
-        const urls = r._foto_urls || [];
 
-        const fotoHtml = urls.length
-            ? criarImgComFallback(urls, 'width:100%;max-height:160px;object-fit:contain;background:#000;display:block;')
-            : '<div style="background:#f7fafc;padding:14px;text-align:center;font-size:11px;color:#a0aec0;">Sem foto</div>';
+        const temLixo = (r.tem_lixo || '').toLowerCase();
+        let cor, label;
+        if (temLixo === 'nao' || temLixo === 'não') {
+            cor = '#38a169'; label = 'Local limpo';
+        } else if (temLixo === 'sim') {
+            cor = '#d69e2e'; label = 'Recorrência';
+        } else {
+            cor = '#e53e3e'; label = 'Ponto novo';
+        }
+
+        const urls = r._foto_urls || [];
+        const tipoVisual = temLixo === 'nao' || temLixo === 'não' ? 'limpo' : (r.tipo_residuo || 'lixo');
+        const fotoHtml = _thumbHtml(urls, cor);
 
         const popup = '<div style="min-width:220px;">'
             + fotoHtml
-            + '<div style="background:'+cor+';color:#fff;font-weight:700;padding:6px 12px;font-size:12px;">&#127979; Escola — '+(_labels[st]||st)+'</div>'
+            + '<div style="background:'+cor+';color:#fff;font-weight:700;padding:6px 12px;font-size:12px;">&#127979; Escola — '+label+'</div>'
             + '<div style="padding:8px 12px;font-size:12px;line-height:1.9;color:#2d3748;">'
             + '<b>Grupo:</b> '+(r.grupo||'--')+'<br>'
             + '<b>Foto:</b> '+(r.foto||'--')+'<br>'
@@ -502,25 +507,18 @@ function camadaEscolas(rows) {
             + '<b>Coord.:</b> '+lat.toFixed(6)+', '+lon.toFixed(6)
             + '</div></div>';
 
-        const marker = L.marker([lat, lon], {icon: icone(cor, r.tipo_residuo || 'lixo')});
+        const marker = L.marker([lat, lon], {icon: icone(cor, tipoVisual)});
         marker.bindPopup(popup, {maxWidth: 280});
 
-        if (urls.length) {
-            marker.on('popupopen', function() {
-                setTimeout(function() {
-                    const root = document.querySelector('.leaflet-popup-content');
-                    if (!root) return;
-                    const img = root.querySelector('img');
-                    if (img) {
-                        img.style.cursor = 'zoom-in';
-                        img.onclick = function(e) {
-                            e.stopPropagation();
-                            _abrirGaleria([{urls: urls, caption: (r.foto||'')+(r.data?' · '+r.data:''), cor}], 0, cor);
-                        };
-                    }
-                }, 40);
-            });
-        }
+        marker.on('popupopen', function() {
+            setTimeout(function() {
+                const root = document.querySelector('.leaflet-popup-content');
+                if (!root) return;
+                const gal = [{ urls: urls, caption: (r.foto||'')+(r.data?' · '+r.data:''), cor }];
+                _bindFotoZoom(root, gal, 0, cor);
+            }, 40);
+        });
+
         marker.addTo(layer);
     });
     return layer;
@@ -547,13 +545,13 @@ function setModo(modo){
 function atualizarLegenda(){
     const el=document.getElementById('leg');
     let h='';
-    if(_modo!=='agentes'){
+    if(_modo==='alunos'||_modo==='ambos'){
         h+='<b>Alunos</b>'
             +'<div><span style="color:#e53e3e;">&#9679;</span> Grupo 01</div>'
             +'<div><span style="color:#e53e3e;">&#9679;</span> Grupo 02</div>';
         h+='<b>Tipo res&iacute;duo</b><div>&#128465; Lixo</div><div>&#127795; Poda</div><div>&#127795;&#128465; Lixo+poda</div>';
     }
-    if(_modo!=='alunos'){
+    if(_modo==='agentes'||_modo==='ambos'){
         h+='<b>Fiscais</b>'
             +'<div><span style="color:#e53e3e;">&#9679;</span> Ponto sem registro</div>'
             +'<div><span style="color:#d69e2e;">&#9679;</span> Recorr&ecirc;ncia</div>'
@@ -561,9 +559,9 @@ function atualizarLegenda(){
     }
     if(_modo==='escolas'){
         h+='<b>Escolas</b>'
-            +'<div><span style="color:#e53e3e;">&#9679;</span> Ponto sem registro</div>'
+            +'<div><span style="color:#38a169;">&#9679;</span> Local limpo</div>'
             +'<div><span style="color:#d69e2e;">&#9679;</span> Recorr&ecirc;ncia</div>'
-            +'<div><span style="color:#38a169;">&#9679;</span> Local limpo (&#10003;)</div>';
+            +'<div><span style="color:#e53e3e;">&#9679;</span> Ponto novo</div>';
     }
     el.innerHTML=h;
 }
@@ -627,8 +625,8 @@ function _bindFotoZoom(container, slides, startIdx, cor) {
 
 async function init(){
     map = L.map('map').setView([-7.748,-34.831],13);
-    L.tileLayer('https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png',{
-        attribution:'&copy; OpenStreetMap &copy; CARTO',maxZoom:19}).addTo(map);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+        attribution:'&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>',maxZoom:19}).addTo(map);
 
     if(!SHEET_ID||SHEET_ID.includes('COLE_')){
         document.getElementById('load').innerHTML='<div style="font-size:2rem;">&#9888;</div>'
