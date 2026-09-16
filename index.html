@@ -158,7 +158,7 @@ function _reaplicarCamadas() {
     _camEsc = camadaEscolas(_filtrarPontos(_dadosEsc));
     if (_modo === 'alunos')  _camAl.addTo(map);
     if (_modo === 'agentes') _camAg.addTo(map);
-    if (_modo === 'ambos')   { _camAl.addTo(map); _camAg.addTo(map); }
+    if (_modo === 'ambos')   { _camAl.addTo(map); _camAg.addTo(map); _camEsc.addTo(map); }
     if (_modo === 'escolas') _camEsc.addTo(map);
     atualizarLegenda();
     _atualizarContadores();
@@ -318,7 +318,7 @@ function _atualizarContadores() {
     });
     if (_modo === 'agentes') { contarAg(_filtrarPontos(_dadosAg)); }
     else if (_modo === 'escolas') { contarEsc(_filtrarPontos(_dadosEsc)); }
-    else if (_modo === 'ambos') { contarAg(_filtrarPontos(_dadosAg)); }
+    else if (_modo === 'ambos') { contarAg(_filtrarPontos(_dadosAg)); contarEsc(_filtrarPontos(_dadosEsc)); }
     else { contarAg(_filtrarPontos(_dadosAg)); }
     el.innerHTML = '<span style="color:#38a169;font-weight:700;">&#9679; '+limpo+' limpos</span>'
         + ' &nbsp;&#124;&nbsp; <span style="color:#d69e2e;font-weight:700;">&#9679; '+recorr+' recorrentes</span>'
@@ -690,7 +690,7 @@ function setModo(modo){
     if(_camEsc) map.removeLayer(_camEsc);
     if(modo==='alunos')  { if(_camAl)  _camAl.addTo(map); }
     if(modo==='agentes') { if(_camAg)  _camAg.addTo(map); }
-    if(modo==='ambos')   { if(_camAl)  _camAl.addTo(map); if(_camAg) _camAg.addTo(map); }
+    if(modo==='ambos')   { if(_camAl) _camAl.addTo(map); if(_camAg) _camAg.addTo(map); if(_camEsc) _camEsc.addTo(map); }
     if(modo==='escolas') { if(_camEsc) _camEsc.addTo(map); }
     atualizarLegenda();
     _atualizarContadores();
@@ -711,7 +711,7 @@ function atualizarLegenda(){
             +'<div><span style="color:#d69e2e;">&#9679;</span> Recorr&ecirc;ncia</div>'
             +'<div><span style="color:#38a169;">&#9679;</span> Local limpo (&#10003;)</div>';
     }
-    if(_modo==='escolas'){
+    if(_modo==='escolas'||_modo==='ambos'){
         h+='<b>Escolas</b>'
             +'<div><span style="color:#38a169;">&#9679;</span> Local limpo</div>'
             +'<div><span style="color:#d69e2e;">&#9679;</span> Recorr&ecirc;ncia</div>'
