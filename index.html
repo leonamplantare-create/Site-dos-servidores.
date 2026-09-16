@@ -47,11 +47,12 @@ header p{font-size:0.72rem;opacity:.8;}
   </div>
 </header>
 
-<div class="bar" style="justify-content:space-between;">
+<div class="bar" style="justify-content:space-between;flex-wrap:wrap;gap:6px;">
   <div style="display:flex;gap:8px;align-items:center;">
     <button id="btn-menu" onclick="toggleMenu()" style="background:none;border:none;cursor:pointer;padding:4px 8px;font-size:1.3rem;color:#1E5A8C;line-height:1;">&#9776;</button>
     <span style="font-size:0.8rem;font-weight:600;color:#1E5A8C;">De Olho no Lixo</span>
   </div>
+  <div id="stat-status" style="font-size:0.72rem;color:#718096;display:flex;align-items:center;gap:4px;flex-wrap:wrap;"></div>
   <div class="chips">
     <span class="chip" id="stat-al">0 pontos alunos</span>
     <span class="chip ag" id="stat-ag">0 pontos agentes</span>
@@ -160,6 +161,7 @@ function _reaplicarCamadas() {
     if (_modo === 'ambos')   { _camAl.addTo(map); _camAg.addTo(map); }
     if (_modo === 'escolas') _camEsc.addTo(map);
     atualizarLegenda();
+    _atualizarContadores();
 }
 
 function pinHTML(cor, tipo, corBairro) {
@@ -256,10 +258,71 @@ function criarImgComFallback(urls, style) {
 
 let _allMarkers = [];
 let _ultimaEscala = null;
+let _alRef = {}; // {grupo_foto -> [agentes recorrentes]}
 
 function _trackMarker(marker, cor, tipo) {
     _allMarkers.push({ marker, cor, tipo });
     return marker;
+}
+
+function _distGrau(lat1, lon1, lat2, lon2) {
+    return Math.sqrt((lat1-lat2)**2 + (lon1-lon2)**2);
+}
+
+function _clusterEscolas(rows) {
+    const clusters = [];
+    const assigned = new Set();
+    rows.forEach((r, i) => {
+        if (assigned.has(i)) return;
+        const lat = parseFloat(r.latitude), lon = parseFloat(r.longitude);
+        if (isNaN(lat) || isNaN(lon)) return;
+        const cluster = [r];
+        assigned.add(i);
+        rows.forEach((r2, j) => {
+            if (assigned.has(j)) return;
+            const lat2 = parseFloat(r2.latitude), lon2 = parseFloat(r2.longitude);
+            if (isNaN(lat2) || isNaN(lon2)) return;
+            if (_distGrau(lat, lon, lat2, lon2) < 0.00035) {
+                cluster.push(r2);
+                assigned.add(j);
+            }
+        });
+        cluster.sort((a, b) => ((a.data||'')+(a.hora||'')).localeCompare((b.data||'')+(b.hora||'')));
+        clusters.push(cluster);
+    });
+    return clusters;
+}
+
+function _statusEscola(r) {
+    const t = (r.tem_lixo||'').toLowerCase();
+    if (t === 'nao' || t === 'não') return { cor: '#38a169', label: 'Local limpo', emoji: '✓' };
+    if (t === 'sim') return { cor: '#d69e2e', label: 'Recorrência', emoji: '⚠' };
+    return { cor: '#e53e3e', label: 'Ponto novo', emoji: '🗑' };
+}
+
+function _atualizarContadores() {
+    const el = document.getElementById('stat-status');
+    if (!el) return;
+    let limpo = 0, recorr = 0, novo = 0;
+    const contarAg = (rows) => rows.forEach(r => {
+        const st = r.status || 'novo_ponto';
+        if (st === 'limpo') limpo++;
+        else if (st === 'recorrencia' || st === 'analise_operador') recorr++;
+        else novo++;
+    });
+    const contarEsc = (rows) => rows.forEach(r => {
+        const { label } = _statusEscola(r);
+        if (label === 'Local limpo') limpo++;
+        else if (label === 'Recorrência') recorr++;
+        else novo++;
+    });
+    if (_modo === 'agentes') { contarAg(_filtrarPontos(_dadosAg)); }
+    else if (_modo === 'escolas') { contarEsc(_filtrarPontos(_dadosEsc)); }
+    else if (_modo === 'ambos') { contarAg(_filtrarPontos(_dadosAg)); }
+    else { contarAg(_filtrarPontos(_dadosAg)); }
+    el.innerHTML = '<span style="color:#38a169;font-weight:700;">&#9679; '+limpo+' limpos</span>'
+        + ' &nbsp;&#124;&nbsp; <span style="color:#d69e2e;font-weight:700;">&#9679; '+recorr+' recorrentes</span>'
+        + ' &nbsp;&#124;&nbsp; <span style="color:#e53e3e;font-weight:700;">&#9679; '+novo+' novos</span>';
 }
 
 function tipoAg(status, tipo_residuo) {
@@ -295,6 +358,7 @@ function camadaAlunos(rows) {
     const layer = L.layerGroup();
     const grupos = [...new Set(rows.map(r=>r.grupo))].sort();
     grupos.forEach(g=>{ _corGrupo[g]=COR_ALUNO; });
+    const _tipos = {'lixo':'Lixo','poda':'Poda','lixo_poda':'Lixo+poda'};
 
     let _pinCount = 0;
     rows.forEach(r=>{
@@ -303,25 +367,73 @@ function camadaAlunos(rows) {
         _pinCount++;
         const cor = COR_ALUNO;
         const tipo= r.tipo_residuo||'lixo';
-        const fotoHtml = _thumbHtml(r._foto_urls, cor);
-        const popup = '<div style="min-width:200px;">'
-            + fotoHtml
-            +'<div style="background:'+cor+';color:#fff;font-weight:700;padding:6px 12px;font-size:12px;margin-top:0;">&#128205; Grupo '+r.grupo+'</div>'
-            +'<div style="padding:8px 12px;">'
-            +'<div style="font-size:12px;line-height:1.9;color:#2d3748;">'
-            +'<b>Foto:</b> '+(r.foto||'--')+'<br>'
-            +'<b>Tipo:</b> '+({'lixo':'Lixo','poda':'Poda','lixo_poda':'Lixo+poda'}[tipo]||tipo)+'<br>'
-            +'<b>Data:</b> '+(r.data||'--')+' '+(r.hora||'')+'<br>'
-            +'<b>Coord.:</b> '+lat.toFixed(6)+', '+lon.toFixed(6)
-            +'</div></div></div>';
+
+        const chaveAl = r.grupo+'_'+r.foto;
+        const agRefs = (_alRef[chaveAl]||[]).slice().sort((a,b)=>((a.data||'')+(a.hora||'')).localeCompare((b.data||'')+(b.hora||'')));
+        const temHist = agRefs.length > 0;
+
+        const slides = [{ urls: r._foto_urls||[], caption: 'Grupo '+r.grupo+' · '+(r.foto||'')+(r.data?' · '+r.data:''), cor, lat, lon, tipo, label:'Ponto novo', data:r.data }];
+        agRefs.forEach(ag => {
+            const _cores = {'recorrencia':'#d69e2e','limpo':'#38a169','analise_operador':'#d69e2e'};
+            const _labels = {'recorrencia':'Recorrência','limpo':'Local limpo','analise_operador':'Recorrência'};
+            slides.push({ urls: ag._foto_urls||[], caption: '🔁 Recorrência · '+(ag.foto||'')+(ag.data?' · '+ag.data:''), cor: _cores[ag.status]||'#e53e3e', lat: parseFloat(ag.latitude)||lat, lon: parseFloat(ag.longitude)||lon, tipo: ag.tipo_residuo||'lixo', label: _labels[ag.status]||'Recorrência', data: ag.data });
+        });
+
+        let popupBody = '';
+        if (temHist) {
+            popupBody = '<div style="background:'+cor+';color:#fff;font-weight:700;padding:6px 12px;font-size:12px;display:flex;justify-content:space-between;align-items:center;">'
+                +'<span>&#128100; Grupo '+r.grupo+'</span>'
+                +'<span style="display:flex;align-items:center;gap:4px;">'
+                +'<button id="alp-'+chaveAl+'-p" style="background:rgba(255,255,255,.25);border:none;color:#fff;border-radius:4px;width:22px;height:22px;cursor:pointer;">&#9664;</button>'
+                +'<span id="alp-ind-'+chaveAl+'" style="font-size:11px;min-width:28px;text-align:center;">1/'+(agRefs.length)+'</span>'
+                +'<button id="alp-'+chaveAl+'-n" style="background:rgba(255,255,255,.25);border:none;color:#fff;border-radius:4px;width:22px;height:22px;cursor:pointer;">&#9654;</button>'
+                +'</span></div>'
+                +_thumbHtml(r._foto_urls, cor)
+                +'<div style="padding:6px 12px;font-size:11px;color:#718096;border-bottom:1px solid #edf2f7;">'
+                +'<b style="color:#2d3748;">'+r.foto+'</b> &nbsp;|&nbsp; '+(r.data||'--')+' '+(r.hora||'')+' &nbsp;|&nbsp; '+(_tipos[tipo]||tipo)+'<br>Coord.: '+lat.toFixed(5)+', '+lon.toFixed(5)+'</div>'
+                +'<div id="alp-slide-'+chaveAl+'" style="padding:6px 10px;"></div>';
+        } else {
+            popupBody = _thumbHtml(r._foto_urls, cor)
+                +'<div style="background:'+cor+';color:#fff;font-weight:700;padding:6px 12px;font-size:12px;">&#128205; Grupo '+r.grupo+'</div>'
+                +'<div style="padding:8px 12px;font-size:12px;line-height:1.9;color:#2d3748;">'
+                +'<b>Foto:</b> '+(r.foto||'--')+'<br>'
+                +'<b>Tipo:</b> '+(_tipos[tipo]||tipo)+'<br>'
+                +'<b>Data:</b> '+(r.data||'--')+' '+(r.hora||'')+'<br>'
+                +'<b>Coord.:</b> '+lat.toFixed(6)+', '+lon.toFixed(6)+'</div>';
+        }
+
+        const popup = '<div style="min-width:220px;">'+popupBody+'</div>';
         const mAl = _trackMarker(L.marker([lat,lon],{icon:icone(cor,tipo)}), cor, tipo);
-        mAl.bindPopup(popup,{maxWidth:240});
+        mAl.bindPopup(popup,{maxWidth:280});
         mAl.on('popupopen', function(){
             setTimeout(function(){
                 const root = document.querySelector('.leaflet-popup-content');
                 if (!root) return;
-                const gal = [{ urls: r._foto_urls||[], caption: (r.foto||'') + (r.data?' · '+r.data:''), cor: cor }];
-                _bindFotoZoom(root, gal, 0, cor);
+                if (temHist) {
+                    let curIdx = 0;
+                    const renderAlSlide = () => {
+                        const el = document.getElementById('alp-slide-'+chaveAl);
+                        const ind = document.getElementById('alp-ind-'+chaveAl);
+                        if (!el) return;
+                        const ag = agRefs[curIdx];
+                        const _cores = {'recorrencia':'#d69e2e','limpo':'#38a169','analise_operador':'#d69e2e'};
+                        const _labels = {'recorrencia':'Recorrência','limpo':'Local limpo','analise_operador':'Recorrência'};
+                        const cAg = _cores[ag.status]||'#e53e3e';
+                        if (ind) ind.textContent = (curIdx+1)+'/'+agRefs.length;
+                        el.innerHTML = '<div style="background:'+cAg+'20;border-left:3px solid '+cAg+';border-radius:4px;padding:6px 8px;font-size:11px;line-height:1.7;color:#2d3748;">'
+                            +'<b style="color:'+cAg+';">'+(_labels[ag.status]||'Recorrência')+'</b><br>'
+                            +(ag.data ? ag.data+' '+(ag.hora||'') : '')+'<br>'
+                            +(_tipos[ag.tipo_residuo]||'--')
+                            +(ag._foto_urls&&ag._foto_urls.length ? '<br><span style="font-size:10px;color:#718096;">Clique na foto principal para ver todas</span>' : '')
+                            +'</div>';
+                    };
+                    renderAlSlide();
+                    const bp = document.getElementById('alp-'+chaveAl+'-p');
+                    const bn = document.getElementById('alp-'+chaveAl+'-n');
+                    if (bp) bp.onclick = e => { e.stopPropagation(); curIdx=(curIdx-1+agRefs.length)%agRefs.length; renderAlSlide(); };
+                    if (bn) bn.onclick = e => { e.stopPropagation(); curIdx=(curIdx+1)%agRefs.length; renderAlSlide(); };
+                }
+                _bindFotoZoom(root, slides, 0, cor);
             }, 40);
         });
         mAl.addTo(layer);
@@ -409,14 +521,15 @@ function camadaAgentes(rows) {
         let slides = [];
         let popup;
         if (temHist) {
+            const _latRef = parseFloat(r.ref_lat)||lat, _lonRef = parseFloat(r.ref_lon)||lon;
             slides = [
-                {tipo:'aluno', grupo:r.ref_grupo, foto:r.ref_foto, lat:r.ref_lat||lat, lon:r.ref_lon||lon, data:r.data, hora:r.hora, urls:r._ref_foto_urls||[], status:st, tipo_residuo:r.tipo_residuo}
+                { urls:r._ref_foto_urls||[], caption:'👤 Aluno ref. · Gr '+r.ref_grupo+' · '+r.ref_foto+(r.data?' · '+r.data:''), cor:'#e53e3e', lat:_latRef, lon:_lonRef, tipo:r.tipo_residuo||'lixo', label:'Ponto original', data:r.data }
             ];
-            histArr.forEach(ag => slides.push({
-                tipo:'agente', foto:ag.foto, data:ag.data, hora:ag.hora,
-                status:ag.status, tipo_residuo:ag.tipo_residuo,
-                urls: ag._foto_urls||[]
-            }));
+            histArr.forEach(ag => {
+                const cAg = _cores[ag.status]||'#718096';
+                const lAg = {'recorrencia':'Recorrência','limpo':'Local limpo','analise_operador':'Recorrência'}[ag.status]||'Recorrência';
+                slides.push({ urls:ag._foto_urls||[], caption:'👷 Agente · '+ag.foto+(ag.data?' · '+ag.data:''), cor:cAg, lat:parseFloat(ag.latitude)||lat, lon:parseFloat(ag.longitude)||lon, tipo:ag.tipo_residuo||'lixo', label:lAg, data:ag.data });
+            });
             window._histSlides[chave] = slides;
             const idxAtual   = Math.max(1, histArr.findIndex(x=>x.foto===r.foto)+1);
             const totalSlides = slides.length;
@@ -466,6 +579,15 @@ function camadaAgentes(rows) {
                     const totalSl = (window._histSlides[chave]||[]).length;
                     if (bp) bp.onclick = (e) => { e.stopPropagation(); _navHistIdx(chave,-1,totalSl); };
                     if (bn) bn.onclick = (e) => { e.stopPropagation(); _navHistIdx(chave,1,totalSl); };
+                    const root = document.querySelector('.leaflet-popup-content');
+                    if (root) _bindFotoZoom(root, slides, idxAtual, cor);
+                }, 30);
+            });
+        } else {
+            marker.on('popupopen', () => {
+                setTimeout(() => {
+                    const root = document.querySelector('.leaflet-popup-content');
+                    if (root) _bindFotoZoom(root, [{ urls: r._foto_urls||[], caption: '👷 Agente · '+(r.foto||'')+(r.data?' · '+r.data:''), cor, lat, lon, tipo: r.tipo_residuo||'lixo', label: _labels[st]||'Ponto novo', data: r.data }], 0, cor);
                 }, 30);
             });
         }
@@ -476,49 +598,80 @@ function camadaAgentes(rows) {
 
 function camadaEscolas(rows) {
     const layer = L.layerGroup();
-    const _tipos  = {'lixo':'Lixo','poda':'Poda','lixo_poda':'Lixo+poda','indefinido':'--'};
+    const _tipos = {'lixo':'Lixo','poda':'Poda','lixo_poda':'Lixo+poda','indefinido':'--'};
+    const clusters = _clusterEscolas(rows);
 
-    rows.forEach(r => {
-        const lat = parseFloat(r.latitude), lon = parseFloat(r.longitude);
+    clusters.forEach(cluster => {
+        const ultimo = cluster[cluster.length - 1];
+        const lat = parseFloat(ultimo.latitude), lon = parseFloat(ultimo.longitude);
         if (isNaN(lat) || isNaN(lon) || !_coordValida(lat, lon)) return;
 
-        const temLixo = (r.tem_lixo || '').toLowerCase();
-        let cor, label;
-        if (temLixo === 'nao' || temLixo === 'não') {
-            cor = '#38a169'; label = 'Local limpo';
-        } else if (temLixo === 'sim') {
-            cor = '#d69e2e'; label = 'Recorrência';
+        const { cor, label } = _statusEscola(ultimo);
+        const tipoVisual = cor === '#38a169' ? 'limpo' : (ultimo.tipo_residuo || 'lixo');
+        const temHist = cluster.length > 1;
+        const chave = 'esc_'+lat.toFixed(5)+'_'+lon.toFixed(5);
+
+        const slides = cluster.map((r2, i) => {
+            const s2 = _statusEscola(r2);
+            return { urls: r2._foto_urls||[], caption: '🏫 Escola · '+(r2.foto||'')+(r2.data?' · '+r2.data:''), cor: s2.cor, lat: parseFloat(r2.latitude)||lat, lon: parseFloat(r2.longitude)||lon, tipo: r2.tipo_residuo||'lixo', label: s2.label, data: r2.data, hora: r2.hora, grupo: r2.grupo };
+        });
+
+        let popupBody = '';
+        if (temHist) {
+            popupBody = '<div style="background:'+cor+';color:#fff;font-weight:700;padding:6px 12px;font-size:12px;display:flex;justify-content:space-between;align-items:center;">'
+                +'<span>&#127979; Escola — '+label+'</span>'
+                +'<span style="display:flex;align-items:center;gap:4px;">'
+                +'<button id="esp-'+chave+'-p" style="background:rgba(255,255,255,.25);border:none;color:#fff;border-radius:4px;width:22px;height:22px;cursor:pointer;">&#9664;</button>'
+                +'<span id="esp-ind-'+chave+'" style="font-size:11px;min-width:36px;text-align:center;">'+cluster.length+'/'+cluster.length+'</span>'
+                +'<button id="esp-'+chave+'-n" style="background:rgba(255,255,255,.25);border:none;color:#fff;border-radius:4px;width:22px;height:22px;cursor:pointer;">&#9654;</button>'
+                +'</span></div>'
+                +'<div id="esp-foto-'+chave+'">'+_thumbHtml(ultimo._foto_urls, cor)+'</div>'
+                +'<div id="esp-info-'+chave+'" style="padding:6px 12px;font-size:11px;color:#718096;border-bottom:1px solid #edf2f7;">'
+                +'<b style="color:#2d3748;">'+ultimo.foto+'</b> &nbsp;|&nbsp; '+(ultimo.data||'--')+' &nbsp;|&nbsp; '+(_tipos[ultimo.tipo_residuo]||'--')
+                +'<br>Gr. '+(ultimo.grupo||'--')+' &nbsp;|&nbsp; Coord.: '+lat.toFixed(5)+', '+lon.toFixed(5)+'</div>'
+                +'<div style="padding:4px 10px 6px;font-size:10px;color:#a0aec0;text-align:center;">'+cluster.length+' registro(s) neste local · clique na foto para ampliar</div>';
         } else {
-            cor = '#e53e3e'; label = 'Ponto novo';
+            popupBody = _thumbHtml(ultimo._foto_urls, cor)
+                +'<div style="background:'+cor+';color:#fff;font-weight:700;padding:6px 12px;font-size:12px;">&#127979; Escola — '+label+'</div>'
+                +'<div style="padding:8px 12px;font-size:12px;line-height:1.9;color:#2d3748;">'
+                +'<b>Grupo:</b> '+(ultimo.grupo||'--')+'<br>'
+                +'<b>Foto:</b> '+(ultimo.foto||'--')+'<br>'
+                +'<b>Tipo:</b> '+(_tipos[ultimo.tipo_residuo]||'--')+'<br>'
+                +'<b>Data:</b> '+(ultimo.data||'--')+' '+(ultimo.hora||'')+'<br>'
+                +'<b>Coord.:</b> '+lat.toFixed(6)+', '+lon.toFixed(6)+'</div>';
         }
 
-        const urls = r._foto_urls || [];
-        const tipoVisual = temLixo === 'nao' || temLixo === 'não' ? 'limpo' : (r.tipo_residuo || 'lixo');
-        const fotoHtml = _thumbHtml(urls, cor);
-
-        const popup = '<div style="min-width:220px;">'
-            + fotoHtml
-            + '<div style="background:'+cor+';color:#fff;font-weight:700;padding:6px 12px;font-size:12px;">&#127979; Escola — '+label+'</div>'
-            + '<div style="padding:8px 12px;font-size:12px;line-height:1.9;color:#2d3748;">'
-            + '<b>Grupo:</b> '+(r.grupo||'--')+'<br>'
-            + '<b>Foto:</b> '+(r.foto||'--')+'<br>'
-            + '<b>Tipo:</b> '+(_tipos[r.tipo_residuo]||'--')+'<br>'
-            + '<b>Data:</b> '+(r.data||'--')+' '+(r.hora||'')+'<br>'
-            + '<b>Coord.:</b> '+lat.toFixed(6)+', '+lon.toFixed(6)
-            + '</div></div>';
-
         const marker = L.marker([lat, lon], {icon: icone(cor, tipoVisual)});
-        marker.bindPopup(popup, {maxWidth: 280});
+        marker.bindPopup('<div style="min-width:230px;">'+popupBody+'</div>', {maxWidth: 290});
 
         marker.on('popupopen', function() {
             setTimeout(function() {
                 const root = document.querySelector('.leaflet-popup-content');
                 if (!root) return;
-                const gal = [{ urls: urls, caption: (r.foto||'')+(r.data?' · '+r.data:''), cor }];
-                _bindFotoZoom(root, gal, 0, cor);
+                if (temHist) {
+                    let curIdx = cluster.length - 1;
+                    const renderEscSlide = () => {
+                        const r2 = cluster[curIdx];
+                        const s2 = _statusEscola(r2);
+                        const fotoEl = document.getElementById('esp-foto-'+chave);
+                        const infoEl = document.getElementById('esp-info-'+chave);
+                        const indEl  = document.getElementById('esp-ind-'+chave);
+                        if (fotoEl) fotoEl.innerHTML = _thumbHtml(r2._foto_urls, s2.cor);
+                        if (indEl)  indEl.textContent = (curIdx+1)+'/'+cluster.length;
+                        if (infoEl) infoEl.innerHTML = '<b style="color:#2d3748;">'+r2.foto+'</b> &nbsp;|&nbsp; '+(r2.data||'--')+' &nbsp;|&nbsp; '+(_tipos[r2.tipo_residuo]||'--')+'<br>Gr. '+(r2.grupo||'--')+' &nbsp;|&nbsp; Coord.: '+(parseFloat(r2.latitude)||lat).toFixed(5)+', '+(parseFloat(r2.longitude)||lon).toFixed(5);
+                        const img2 = root.querySelector('#esp-foto-'+chave+' img');
+                        if (img2) { img2.style.cursor='zoom-in'; img2.onclick = e => { e.stopPropagation(); _abrirGaleria(slides, curIdx, s2.cor); }; }
+                    };
+                    renderEscSlide();
+                    const bp = document.getElementById('esp-'+chave+'-p');
+                    const bn = document.getElementById('esp-'+chave+'-n');
+                    if (bp) bp.onclick = e => { e.stopPropagation(); curIdx=(curIdx-1+cluster.length)%cluster.length; renderEscSlide(); };
+                    if (bn) bn.onclick = e => { e.stopPropagation(); curIdx=(curIdx+1)%cluster.length; renderEscSlide(); };
+                } else {
+                    _bindFotoZoom(root, slides, 0, cor);
+                }
             }, 40);
         });
-
         marker.addTo(layer);
     });
     return layer;
@@ -540,6 +693,7 @@ function setModo(modo){
     if(modo==='ambos')   { if(_camAl)  _camAl.addTo(map); if(_camAg) _camAg.addTo(map); }
     if(modo==='escolas') { if(_camEsc) _camEsc.addTo(map); }
     atualizarLegenda();
+    _atualizarContadores();
 }
 
 function atualizarLegenda(){
@@ -572,15 +726,17 @@ function _ensureLightbox() {
     let ov = document.getElementById('mv-lightbox');
     if (ov) return ov;
     ov = document.createElement('div'); ov.id = 'mv-lightbox';
-    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.94);z-index:99999;display:none;align-items:center;justify-content:center;flex-direction:column;';
-    ov.innerHTML = '<button id="mv-lb-close" style="position:absolute;top:14px;right:14px;width:40px;height:40px;border:none;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;font-size:22px;cursor:pointer;">&#10005;</button>'
-        +'<button id="mv-lb-prev" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:44px;height:44px;border:none;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;font-size:22px;cursor:pointer;display:none;">&#9664;</button>'
-        +'<div style="max-width:94vw;max-height:86vh;display:flex;align-items:center;justify-content:center;border-radius:12px;padding:6px;background:#222;">'
-        +'<img id="mv-lb-img" style="max-width:90vw;max-height:82vh;object-fit:contain;border-radius:8px;display:block;background:#000;" alt="foto">'
+    ov.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.96);z-index:99999;display:none;align-items:center;justify-content:center;flex-direction:column;gap:0;';
+    ov.innerHTML =
+        '<button id="mv-lb-close" style="position:absolute;top:14px;right:14px;width:40px;height:40px;border:none;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;font-size:22px;cursor:pointer;z-index:2;">&#10005;</button>'
+        +'<button id="mv-lb-prev" style="position:absolute;left:10px;top:50%;transform:translateY(-50%);width:44px;height:44px;border:none;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;font-size:22px;cursor:pointer;display:none;z-index:2;">&#9664;</button>'
+        +'<div id="mv-lb-frame" style="max-width:92vw;max-height:78vh;display:flex;align-items:center;justify-content:center;border-radius:14px;padding:5px;background:#222;border:4px solid #718096;transition:border-color .2s;">'
+        +'<img id="mv-lb-img" style="max-width:88vw;max-height:74vh;object-fit:contain;border-radius:10px;display:block;background:#000;" alt="foto">'
         +'</div>'
-        +'<button id="mv-lb-next" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:44px;height:44px;border:none;border-radius:50%;background:rgba(255,255,255,.2);color:#fff;font-size:22px;cursor:pointer;display:none;">&#9654;</button>'
-        +'<div id="mv-lb-caption" style="color:#e2e8f0;font-size:13px;margin-top:12px;text-align:center;max-width:90vw;"></div>'
-        +'<div id="mv-lb-ind" style="color:#a0aec0;font-size:12px;margin-top:4px;"></div>';
+        +'<button id="mv-lb-next" style="position:absolute;right:10px;top:50%;transform:translateY(-50%);width:44px;height:44px;border:none;border-radius:50%;background:rgba(255,255,255,.18);color:#fff;font-size:22px;cursor:pointer;display:none;z-index:2;">&#9654;</button>'
+        +'<div id="mv-lb-meta" style="margin-top:10px;background:rgba(255,255,255,.07);border-radius:10px;padding:8px 16px;max-width:92vw;width:max-content;display:flex;gap:16px;flex-wrap:wrap;align-items:center;justify-content:center;"></div>'
+        +'<div id="mv-lb-caption" style="color:#a0aec0;font-size:12px;margin-top:5px;text-align:center;max-width:90vw;"></div>'
+        +'<div id="mv-lb-ind" style="color:#718096;font-size:11px;margin-top:3px;"></div>';
     document.body.appendChild(ov);
     document.getElementById('mv-lb-close').onclick = () => ov.style.display = 'none';
     document.getElementById('mv-lb-prev').onclick  = () => { _lbIdx = (_lbIdx-1+_lbSlides.length)%_lbSlides.length; _lbRender(); };
@@ -600,6 +756,17 @@ function _lbRender() {
     const img = document.getElementById('mv-lb-img');
     img._n = 0; img.src = s.urls[0];
     img.onerror = () => { img._n=(img._n||0)+1; if(img._n<s.urls.length) img.src=s.urls[img._n]; };
+    const cor = s.cor || '#718096';
+    document.getElementById('mv-lb-frame').style.borderColor = cor;
+    const _tipos = {'lixo':'Lixo','poda':'Poda','lixo_poda':'Lixo+poda','indefinido':'--'};
+    const metaEl = document.getElementById('mv-lb-meta');
+    const lat = s.lat ? parseFloat(s.lat).toFixed(6) : '--';
+    const lon = s.lon ? parseFloat(s.lon).toFixed(6) : '--';
+    metaEl.innerHTML =
+        '<span style="color:'+cor+';font-weight:700;font-size:12px;">&#9679; '+(s.label||'--')+'</span>'
+        +(s.tipo ? ' &nbsp;&#124;&nbsp; <span style="color:#e2e8f0;font-size:12px;">'+(_tipos[s.tipo]||s.tipo)+'</span>' : '')
+        +' &nbsp;&#124;&nbsp; <span style="color:#a0aec0;font-size:11px;">'+lat+', '+lon+'</span>'
+        +(s.data ? ' &nbsp;&#124;&nbsp; <span style="color:#a0aec0;font-size:11px;">'+s.data+'</span>' : '');
     document.getElementById('mv-lb-caption').textContent = s.caption||'';
     const multi = _lbSlides.length>1;
     document.getElementById('mv-lb-ind').textContent = multi ? (_lbIdx+1)+'/'+_lbSlides.length : '';
@@ -643,7 +810,16 @@ async function init(){
         _dadosAl  = rAl;
         _dadosAg  = rAg;
         _dadosEsc = rEsc;
-        console.log('[index] alunos:', rAl.length, '| agentes:', rAg.length, '| escolas:', rEsc.length);
+        // Construir índice: aluno (grupo+foto) → agentes recorrentes que referenciam
+        _alRef = {};
+        rAg.forEach(ag => {
+            if (ag.ref_grupo && ag.ref_foto) {
+                const k = ag.ref_grupo+'_'+ag.ref_foto;
+                if (!_alRef[k]) _alRef[k] = [];
+                _alRef[k].push(ag);
+            }
+        });
+        console.log('[index] alunos:', rAl.length, '| agentes:', rAg.length, '| escolas:', rEsc.length, '| refs:', Object.keys(_alRef).length);
         document.getElementById('stat-al').textContent  = rAl.length+' pontos alunos';
         document.getElementById('stat-ag').textContent  = rAg.length+' pontos agentes';
         document.getElementById('stat-esc').textContent = rEsc.length+' pontos escolas';
