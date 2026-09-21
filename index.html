@@ -491,6 +491,8 @@ function _renderHistSlide(chave) {
         const fotoEl = el.closest('.leaflet-popup-content')?.querySelector('.hist-foto-wrap');
         if (fotoEl && s.urls && s.urls.length) {
             fotoEl.innerHTML = criarImgComFallback(s.urls, 'width:100%;max-height:160px;object-fit:contain;background:#000;display:block;border-radius:4px 4px 0 0;');
+            const _ni = fotoEl.querySelector('img');
+            if (_ni) { _ni.style.cursor='zoom-in'; _ni.onclick = ev => { ev.stopPropagation(); _abrirGaleria(slides, idx, s.cor||'#718096'); }; }
         }
     } else {
         const cor = s.status==='limpo'?'#16a34a':s.status==='recorrencia'?'#d97706':'#e53e3e';
@@ -505,6 +507,8 @@ function _renderHistSlide(chave) {
         const fotoEl = el.closest('.leaflet-popup-content')?.querySelector('.hist-foto-wrap');
         if (fotoEl && s.urls && s.urls.length) {
             fotoEl.innerHTML = criarImgComFallback(s.urls, 'width:100%;max-height:160px;object-fit:contain;background:#000;display:block;border-radius:4px 4px 0 0;');
+            const _ni = fotoEl.querySelector('img');
+            if (_ni) { _ni.style.cursor='zoom-in'; _ni.onclick = ev => { ev.stopPropagation(); _abrirGaleria(slides, idx, s.cor||cor); }; }
         }
     }
 }
