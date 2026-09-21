@@ -313,7 +313,7 @@ function _clusterEscolas(rows) {
 function _statusEscola(r) {
     const t = (r.tem_lixo||'').toLowerCase();
     if (t === 'nao' || t === 'não') return { cor: '#38a169', label: 'Local limpo', emoji: '✓' };
-    if (t === 'sim') return { cor: '#d69e2e', label: 'Recorrência', emoji: '⚠' };
+    if (r.ref_grupo && r.ref_foto) return { cor: '#d69e2e', label: 'Recorrência', emoji: '⚠' };
     return { cor: '#e53e3e', label: 'Ponto novo', emoji: '🗑' };
 }
 
@@ -677,7 +677,8 @@ function camadaEscolas(rows) {
                         if (fotoEl) fotoEl.innerHTML = _thumbHtml(r2._foto_urls, s2.cor);
                         if (indEl)  indEl.textContent = (curIdx+1)+'/'+cluster.length;
                         if (infoEl) infoEl.innerHTML = '<b style="color:#2d3748;">'+r2.foto+'</b> &nbsp;|&nbsp; '+(r2.data||'--')+' &nbsp;|&nbsp; '+(_tipos[r2.tipo_residuo]||'--')+'<br>Gr. '+(r2.grupo||'--')+' &nbsp;|&nbsp; Coord.: '+(parseFloat(r2.latitude)||lat).toFixed(5)+', '+(parseFloat(r2.longitude)||lon).toFixed(5);
-                        const img2 = root.querySelector('#esp-foto-'+chave+' img');
+                        const _fotoDiv = document.getElementById('esp-foto-'+chave);
+                        const img2 = _fotoDiv ? _fotoDiv.querySelector('img') : null;
                         if (img2) { img2.style.cursor='zoom-in'; img2.onclick = e => { e.stopPropagation(); _abrirGaleria(slides, curIdx, s2.cor); }; }
                     };
                     renderEscSlide();
